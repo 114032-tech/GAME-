@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谿山行旅圖 - 名畫大富翁 PWA</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#3d352d">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #f4f1ea;
+            color: #332b1d;
+            background-image: radial-gradient(#dcd7c9 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border: 12px solid #3d352d;
+            position: relative;
+            background: #e8e4d9;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+        }
+
+        .cell {
+            border: 1px solid #bcaf9b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2px;
+            font-size: 0.7rem;
+            text-align: center;
+            background-color: #fffaf0;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .center-art {
+            grid-column: 2 / 6;
+            grid-row: 2 / 6;
+            position: relative;
+            background-color: #c5ba9d;
+            border: 4px double #8e8372;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .center-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.9;
+            filter: sepia(20%) contrast(110%);
+        }
+
+        .center-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 8px;
+            font-size: 0.8rem;
+            text-align: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .player {
+            width: 36px;
+            height: 36px;
+            background: #8b0000;
+            border-radius: 50%;
+            border: 3px solid #f4f1ea;
+            position: absolute;
+            z-index: 50;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .player::after {
+            content: "📍";
+            position: absolute;
+            top: -20px;
+            font-size: 18px;
+        }
+
+        .emoji-icon {
+            font-size: 1.5rem;
+            margin-bottom: 2px;
+        }
+
+        .active-cell {
+            background-color: #fff2cc !important;
+            box-shadow: inset 0 0 15px #d4a373;
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .dice-btn {
+            background-color: #3d352d;
+            color: #f4f1ea;
+            padding: 14px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            transition: all 0.2s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .bouncing {
+            animation: bounce 0.4s ease infinite;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto text-center">
+        <div class="mb-6">
+            <h1 class="text-4xl font-black mb-2 tracking-widest text-[#3d352d]">谿山行旅圖</h1>
+            <p class="text-gray-600 font-medium">—— 名畫大富翁 ——</p>
+        </div>
+
+        <div class="board shadow-2xl" id="gameBoard">
+            <div class="center-art">
+                <img src="https://digitalarchive.npm.gov.tw/Collection/Detail/1195?dep=P" alt="" onerror="this.src='https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&q=80&w=600'">
+                <div class="center-overlay" id="currentDesc">
+                    點擊投擲骰子，開啟終南山之旅
+                </div>
+            </div>
+            <div id="playerPiece" class="player">行者</div>
+        </div>
+
+        <div class="mt-8 flex flex-col items-center">
+            <div id="diceDisplay" class="text-6xl mb-4 h-16">🎲</div>
+            <button id="rollDice" class="dice-btn">投擲骰子</button>
+            
+            <div class="max-w-[600px] w-full mt-8 bg-white/80 backdrop-blur p-6 rounded-2xl border border-stone-200 text-left">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="font-bold text-stone-700">旅途進度</span>
+                    <span id="score" class="text-sm font-bold text-amber-800">準備出發...</span>
+                </div>
+                <div class="w-full bg-stone-200 rounded-full h-3 mb-4">
+                    <div id="progressBar" class="bg-amber-800 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div id="messageBox" class="p-4 bg-stone-50 rounded-xl text-stone-600 italic border-l-4 border-stone-400">
+                    「與其師人，不若師諸造化。」—— 范寬
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-3xl max-w-sm w-full shadow-2xl text-center">
+            <div id="modalEmoji" class="text-6xl mb-4">✨</div>
+            <h3 id="modalTitle" class="text-2xl font-bold mb-3 text-stone-800"></h3>
+            <p id="modalBody" class="text-stone-600 mb-6"></p>
+            <button onclick="closeModal()" class="w-full py-4 bg-stone-800 text-white rounded-xl font-bold">繼續前行</button>
+        </div>
+    </div>
+
+    <script>
+        // 註冊 Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    console.log('SW registered');
+                }).catch(err => {
+                    console.log('SW registration failed:', err);
+                });
+            });
+        }
+
+        const cellsData = [
+            { name: "起點", emoji: "⛩️", desc: "終南山下，背起行囊。", type: "start" },
+            { name: "巨石", emoji: "🔘", desc: "近景巨石展現土石沈穩質感。", type: "art" },
+            { name: "溪水", emoji: "🌊", desc: "淙淙流水聲響徹山谷。", type: "event" },
+            { name: "山徑", emoji: "🛤️", desc: "路徑蜿蜒進入畫作深處。", type: "art" },
+            { name: "驢隊", emoji: "🫏", desc: "看！驢隊馱著貨物緩緩走過。", type: "art" },
+            { name: "客店", emoji: "🏡", desc: "山凹處有客店，休息片刻。", type: "event" }, 
+            { name: "雜樹", emoji: "🌳", desc: "林木參差，筆勢雄厚。", type: "art" },
+            { name: "一線瀑", emoji: "💧", desc: "飛瀑如銀絲般垂下。", type: "art" },
+            { name: "山腰雲", emoji: "☁️", desc: "雲氣繚繞，隔開虛實。", type: "art" },
+            { name: "幽谷", emoji: "🕳️", desc: "深谷幽暗，隱約可聞鐘聲。", type: "art" },
+            { name: "古寺", emoji: "🏯", desc: "山間隱約可見寺廟建築。", type: "art" },
+            { name: "雨點皴", emoji: "🌧️", desc: "范寬獨創技術，充滿重量感。", type: "event" }, 
+            { name: "隱藏簽名", emoji: "✍️", desc: "在右下角樹叢發現『范寬』二字！", type: "luck" },
+            { name: "主峰", emoji: "⛰️", desc: "主山聳立，占據畫幅三分之二。", type: "art" },
+            { name: "峭壁", emoji: "🧱", desc: "懸崖峭壁，筆力峭古。", type: "art" },
+            { name: "墨色", emoji: "🎨", desc: "濃墨焦墨交替使用，層次深厚。", type: "art" },
+            { name: "山真骨", emoji: "🦴", desc: "寫山之真骨，自成一家。", type: "art" },
+            { name: "酒家", emoji: "🍶", desc: "與范寬在林間共飲一杯。", type: "event" }, 
+            { name: "行商", emoji: "📦", desc: "路遇行商，分享山中奇遇。", type: "luck" },
+            { name: "大成", emoji: "🏆", desc: "觀畫大成，領悟造化之妙。", type: "end" }
+        ];
+
+        const cellMapping = [[0,0], [0,1], [0,2], [0,3], [0,4], [0,5], [1,5], [2,5], [3,5], [4,5], [5,5], [5,4], [5,3], [5,2], [5,1], [5,0], [4,0], [3,0], [2,0], [1,0]];
+        let currentPos = 0, totalSteps = 0;
+        const goalSteps = 20;
+
+        function initBoard() {
+            const board = document.getElementById('gameBoard');
+            cellMapping.forEach((pos, index) => {
+                const cellDiv = document.createElement('div');
+                cellDiv.className = 'cell';
+                cellDiv.style.gridRow = pos[0] + 1;
+                cellDiv.style.gridColumn = pos[1] + 1;
+                cellDiv.id = `cell-${index}`;
+                cellDiv.innerHTML = `<span class="emoji-icon">${cellsData[index].emoji}</span><div class="cell-content font-bold">${cellsData[index].name}</div>`;
+                board.appendChild(cellDiv);
+            });
+            updatePlayerPosition();
+        }
+
+        function updatePlayerPosition() {
+            const playerPiece = document.getElementById('playerPiece');
+            const targetCell = document.getElementById(`cell-${currentPos}`);
+            const rect = targetCell.getBoundingClientRect();
+            const boardRect = document.getElementById('gameBoard').getBoundingClientRect();
+            playerPiece.style.top = `${rect.top - boardRect.top + (rect.height / 2) - 18}px`;
+            playerPiece.style.left = `${rect.left - boardRect.left + (rect.width / 2) - 18}px`;
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('active-cell'));
+            targetCell.classList.add('active-cell');
+        }
+
+        const diceIcons = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+        document.getElementById('rollDice').onclick = function() {
+            this.disabled = true;
+            const diceDisplay = document.getElementById('diceDisplay');
+            diceDisplay.classList.add('bouncing');
+            let counter = 0;
+            const anim = setInterval(() => {
+                diceDisplay.innerText = diceIcons[Math.floor(Math.random() * 6)];
+                if (++counter > 10) {
+                    clearInterval(anim);
+                    const roll = Math.floor(Math.random() * 6) + 1;
+                    diceDisplay.innerText = diceIcons[roll-1];
+                    diceDisplay.classList.remove('bouncing');
+                    let steps = 0;
+                    const moveInterval = setInterval(() => {
+                        currentPos = (currentPos + 1) % cellsData.length;
+                        updatePlayerPosition();
+                        if (++steps >= roll) {
+                            clearInterval(moveInterval);
+                            document.getElementById('rollDice').disabled = false;
+                            handleLand();
+                        }
+                    }, 250);
+                }
+            }, 80);
+        };
+
+        function handleLand() {
+            const data = cellsData[currentPos];
+            totalSteps++;
+            document.getElementById('progressBar').style.width = `${Math.min((totalSteps / goalSteps) * 100, 100)}%`;
+            document.getElementById('score').innerText = `已跋涉 ${totalSteps} / 20 步`;
+            document.getElementById('currentDesc').innerText = data.desc;
+            document.getElementById('messageBox').innerHTML = `<strong>${data.name}：</strong>${data.desc}`;
+            if (['luck', 'event', 'end'].includes(data.type)) showModal(data.name, data.desc, data.emoji);
+            if (totalSteps >= goalSteps && currentPos === 0) {
+                showModal("登峰造極", "你已完全領會了《谿山行旅圖》的奧祕。", "🏔️");
+                totalSteps = 0;
+            }
+        }
+
+        function showModal(t, b, e) {
+            document.getElementById('modalEmoji').innerText = e || "📜";
+            document.getElementById('modalTitle').innerText = t;
+            document.getElementById('modalBody').innerText = b;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        window.onload = initBoard;
+    </script>
+</body>
+</html>
